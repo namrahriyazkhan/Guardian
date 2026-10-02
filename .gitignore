@@ -1,10 +1,11 @@
-__pycache__/
+﻿__pycache__/
 *.pyc
 *.pyo
 dist/
 build/
-Output/
-*.exe
-*.dll
-.env
+app_memory.json
+app_profiles.json
 guardian_running.lock
+.env
+
+Output/GUARDIAN_Setup_v1.0.exe

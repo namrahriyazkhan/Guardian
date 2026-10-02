@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#070B14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>GUARDIAN HAWKEYE • Remote Controller</title>
+  <link rel="icon" type="image/png" href="/static/guardian_logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070B14;
+      --bg-card: rgba(13, 22, 38, 0.78);
+      --border: rgba(0, 229, 255, 0.22);
+      --border-hi: rgba(0, 229, 255, 0.55);
+      --cyan: #00E5FF;
+      --cyan-glow: rgba(0, 229, 255, 0.35);
+      --red: #FF3366;
+      --red-glow: rgba(255, 51, 102, 0.4);
+      --green: #00E676;
+      --green-glow: rgba(0, 230, 118, 0.35);
+      --yellow: #FFD600;
+      --yellow-glow: rgba(255, 214, 0, 0.35);
+      --purple: #8B5CF6;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.12) 0%, transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+      padding-bottom: 40px;
+    }
+
+    /* ── TOP HEADER BAR ── */
+    header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(7, 11, 20, 0.88);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 14px var(--cyan-glow);
+      flex-shrink: 0;
+    }
+    .brand-icon img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 6px rgba(0, 229, 255, 0.7));
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: #fff;
+    }
+    .brand-sub {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--cyan);
+      letter-spacing: 0.12em;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(0, 229, 255, 0.08);
+      color: var(--cyan);
+      transition: all 0.3s ease;
+    }
+    .status-badge.STANDBY { border-color: rgba(148, 163, 184, 0.3); color: var(--text-muted); background: rgba(148, 163, 184, 0.08); }
+    .status-badge.ARMING { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-glow); animation: pulse 0.8s infinite alternate; }
+    .status-badge.ARMED { border-color: var(--green); color: var(--green); background: var(--green-glow); }
+    .status-badge.TRIGGERED { border-color: var(--red); color: var(--red); background: var(--red-glow); animation: pulseAlert 0.6s infinite alternate; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+    @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; transform: scale(1.05); } }
+    @keyframes pulseAlert { 0% { box-shadow: 0 0 0 0 var(--red-glow); } 100% { box-shadow: 0 0 20px 6px var(--red-glow); } }
+
+    /* ── MAIN CONTAINER ── */
+    main {
+      padding: 20px 16px;
+      max-width: 480px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── PRIMARY ARM / DISARM CIRCULAR SHIELD ── */
+    .shield-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 0 10px;
+    }
+    .shield-btn {
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #132238, #091120);
+      border: 3px solid var(--cyan);
+      box-shadow: 0 0 35px var(--cyan-glow), inset 0 0 20px rgba(0, 229, 255, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .shield-btn:active { transform: scale(0.94); }
+    .shield-btn.ARMING { border-color: var(--yellow); box-shadow: 0 0 40px var(--yellow-glow); }
+    .shield-btn.ARMED { border-color: var(--green); box-shadow: 0 0 45px var(--green-glow), inset 0 0 25px rgba(0, 230, 118, 0.25); }
+    .shield-btn.TRIGGERED { border-color: var(--red); box-shadow: 0 0 55px var(--red-glow), inset 0 0 30px rgba(255, 51, 102, 0.35); animation: shake 0.4s infinite alternate; }
+
+    @keyframes shake { 0% { transform: scale(1) rotate(-1deg); } 100% { transform: scale(1.03) rotate(1deg); } }
+
+    .shield-icon { font-size: 50px; line-height: 1; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+    .shield-status-label {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      margin-top: 8px;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .shield-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── INTRUDER PHOTO ALERT CARD ── */
+    .alert-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.3s ease;
+    }
+    .alert-card.has-photo { border-color: var(--red); box-shadow: 0 0 24px var(--red-glow); }
+    .card-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .photo-frame {
+      width: 100%;
+      height: 200px;
+      border-radius: 12px;
+      background: #020610;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s;
+    }
+    .photo-frame img:hover { transform: scale(1.02); }
+    .no-photo-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+
+    /* ── ACTION CARDS GRID ── */
+    .grid-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .act-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .act-card:hover { border-color: var(--cyan); box-shadow: 0 4px 16px var(--cyan-glow); }
+    .act-card:active { transform: scale(0.96); }
+    .act-card.danger { border-color: rgba(255, 51, 102, 0.35); }
+    .act-card.danger:hover { border-color: var(--red); box-shadow: 0 4px 16px var(--red-glow); }
+    .act-card.active-lockdown {
+      border-color: var(--red) !important;
+      background: rgba(255, 51, 102, 0.2) !important;
+      box-shadow: 0 0 24px var(--red-glow) !important;
+      animation: pulseAlert 0.8s infinite alternate;
+    }
+    .act-icon { font-size: 24px; line-height: 1; }
+    .act-label { font-size: 13px; font-weight: 700; color: #fff; }
+    .act-desc { font-size: 10px; color: var(--text-muted); line-height: 1.3; }
+
+    /* ── LIVE INCIDENT FEED ── */
+    .feed-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .feed-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .clear-btn {
+      background: none;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-family: var(--mono);
+      cursor: pointer;
+    }
+    .clear-btn:hover { color: #fff; border-color: var(--cyan); }
+    .event-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .event-item {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(10, 18, 32, 0.6);
+      border-left: 3px solid var(--cyan);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .event-item.CRITICAL { border-left-color: var(--red); background: rgba(255, 51, 102, 0.08); }
+    .event-item.HIGH { border-left-color: var(--yellow); background: rgba(255, 214, 0, 0.08); }
+    .evt-top { display: flex; align-items: center; justify-content: space-between; }
+    .evt-title { font-size: 12px; font-weight: 700; color: #fff; }
+    .evt-time { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+    .evt-details { font-family: var(--mono); font-size: 11px; color: #cbd5e1; word-break: break-all; }
+
+    /* ── MODALS ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #0D1626;
+      border: 1.5px solid var(--cyan);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 0 50px var(--cyan-glow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-title { font-size: 17px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .pin-input {
+      font-family: var(--mono);
+      font-size: 28px;
+      letter-spacing: 0.3em;
+      text-align: center;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--cyan);
+      background: #050B14;
+      color: var(--cyan);
+      outline: none;
+      width: 100%;
+    }
+    .modal-btn {
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      background: linear-gradient(135deg, #00E5FF, #0284C7);
+      color: #04101D;
+    }
+
+    /* Screen Frame Viewer */
+    .screen-stream-img {
+      width: 100%;
+      max-height: 60vh;
+      object-fit: contain;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <img src="/static/guardian_logo.png" alt="Guardian">
+      </div>
+      <div>
+        <div class="brand-title">GUARDIAN HAWKEYE</div>
+        <div class="brand-sub">LIVE MOBILE REMOTE</div>
+      </div>
+    </div>
+    <div class="status-badge STANDBY" id="mainStatusBadge">
+      <div class="dot"></div> <span id="statusLabel">STANDBY</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- CIRCULAR ARM / DISARM SHIELD -->
+    <div class="shield-section">
+      <button class="shield-btn" id="shieldBtn" onclick="toggleArmState()">
+        <div class="shield-icon" id="shieldIcon">🛡️</div>
+        <div class="shield-status-label" id="shieldStatusText">TAP TO ARM</div>
+        <div class="shield-sub" id="shieldSubText">5s Smart Grace Timer</div>
+      </button>
+    </div>
+
+    <!-- INTRUDER LATEST SNAPSHOT CARD -->
+    <div class="alert-card" id="photoAlertCard">
+      <div class="card-hdr">
+        <div class="card-title">📸 Intruder Stealth Snapshot</div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);" id="photoTimeBadge">No captures yet</span>
+      </div>
+      <div class="photo-frame" onclick="openPhotoLightbox()">
+        <img id="intruderPhotoImg" src="" style="display:none;" alt="Intruder Photo">
+        <div class="no-photo-placeholder" id="noPhotoPlaceholder">
+          <span style="font-size:32px;">📷</span>
+          <span>Camera standing by for intrusion</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTION CARDS GRID -->
+    <div class="grid-title">Workstation Defenses &amp; Controls</div>
+    <div class="actions-grid">
+      <div class="act-card danger" id="lockdownCard" onclick="triggerAction('toggle_lockdown')">
+        <div class="act-icon">🛡️</div>
+        <div class="act-label" id="lockdownLabel">Emergency Lockdown</div>
+        <div class="act-desc" id="lockdownDesc">Fullscreen pitch blackout shield</div>
+      </div>
+      <div class="act-card" onclick="triggerAction('lock')">
+        <div class="act-icon">🔒</div>
+        <div class="act-label">Lock Laptop</div>
+        <div class="act-desc">Instant Windows lock screen</div>
+      </div>
+      <div class="act-card" onclick="openPasswordModal()">
+        <div class="act-icon">🔑</div>
+        <div class="act-label">Change Password</div>
+        <div class="act-desc">Set new PIN/Pass &amp; lock</div>
+      </div>
+      <div class="act-card" onclick="openGhostScreenModal()">
+        <div class="act-icon">📺</div>
+        <div class="act-label">Ghost Screen</div>
+        <div class="act-desc">Real-time screen live mirror</div>
+      </div>
+      <div class="act-card" onclick="window.location.href='/dossier'">
+        <div class="act-icon">📑</div>
+        <div class="act-label">Incident Dossier</div>
+        <div class="act-desc">Forensic report &amp; proof</div>
+      </div>
+      <div class="act-card" onclick="triggerAction('sleep')">
+        <div class="act-icon">💤</div>
+        <div class="act-label">Remote Sleep</div>
+        <div class="act-desc">Puts laptop in sleep mode</div>
+      </div>
+      <div class="act-card danger" onclick="triggerAction('toggle_alarm')">
+        <div class="act-icon">🚨</div>
+        <div class="act-label" id="sirenBtnLabel">Piercing Siren</div>
+        <div class="act-desc">100% volume oscillating alarm</div>
+      </div>
+      <div class="act-card" onclick="triggerAction('snap_photo')">
+        <div class="act-icon">📸</div>
+        <div class="act-label">Snap Photo</div>
+        <div class="act-desc">Silent webcam frame grab</div>
+      </div>
+      <div class="act-card danger" onclick="triggerAction('kill_app')">
+        <div class="act-icon">🛑</div>
+        <div class="act-label">Kill Active App</div>
+        <div class="act-desc">Terminate intruder's window</div>
+      </div>
+      <div class="act-card" onclick="openVoiceShoutModal()">
+        <div class="act-icon">📢</div>
+        <div class="act-label">Voice Warnings</div>
+        <div class="act-desc">4 Instant shouts + Custom TTS</div>
+      </div>
+      <div class="act-card" onclick="triggerAction('test_intruder')">
+        <div class="act-icon">🧪</div>
+        <div class="act-label">Test Intrusion</div>
+        <div class="act-desc">Simulate demo breach event</div>
+      </div>
+    </div>
+
+    <!-- LIVE INCIDENT STREAM -->
+    <div class="feed-card">
+      <div class="feed-hdr">
+        <div class="card-title">⚡ Live Intruder Incident Stream</div>
+        <button class="clear-btn" onclick="clearLogs()">Clear</button>
+      </div>
+      <div class="event-list" id="eventList">
+        <!-- Event items loaded dynamically -->
+      </div>
+    </div>
+  </main>
+
+  <!-- PIN VERIFICATION MODAL -->
+  <div class="modal-overlay" id="pinModal">
+    <div class="modal-box">
+      <div class="modal-title">🔐 Enter 4-Digit Owner PIN</div>
+      <p style="font-size:12px;color:var(--text-muted);">
+        Enter the PIN displayed on your laptop screen to verify pairing.
+      </p>
+      <input type="password" id="pinInput" class="pin-input" maxlength="4" placeholder="••••" pattern="[0-9]*" inputmode="numeric" autofocus>
+      <button class="modal-btn" onclick="submitPin()">VERIFY &amp; CONNECT</button>
+      <div id="pinError" style="color:var(--red);font-size:11px;font-family:var(--mono);text-align:center;display:none;">
+        ❌ Invalid PIN. Please check your laptop screen.
+      </div>
+    </div>
+  </div>
+
+  <!-- CHANGE PASSWORD MODAL -->
+  <div class="modal-overlay" id="passModal">
+    <div class="modal-box">
+      <div class="modal-title">🔑 Change Windows Password</div>
+      <p style="font-size:12px;color:var(--text-muted);">
+        Set a new account password and lock your laptop instantly.
+      </p>
+      <input type="text" id="newPassInput" class="pin-input" style="font-size:18px;letter-spacing:normal;" placeholder="New Password / PIN">
+      <div style="display:flex;gap:8px;">
+        <button class="modal-btn" style="flex:1;background:rgba(255,255,255,0.1);color:#fff;" onclick="generateRandomPass()">🎲 Random</button>
+        <button class="modal-btn" style="flex:2;" onclick="submitNewPass()">CHANGE &amp; LOCK</button>
+      </div>
+      <button class="modal-btn" style="background:none;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;" onclick="closeModal('passModal')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- VOICE SHOUTS & TTS MODAL -->
+  <div class="modal-overlay" id="voiceModal">
+    <div class="modal-box" style="max-width:440px;">
+      <div class="modal-title">📢 Loudspeaker Voice Shouts</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="modal-btn" style="background:rgba(255,51,102,0.15);border:1px solid var(--red);color:#ff6b8b;text-align:left;" onclick="sendVoiceShout(1)">
+          1️⃣ "Chor hai! Laptop chhod do turant!"
+        </button>
+        <button class="modal-btn" style="background:rgba(0,229,255,0.12);border:1px solid var(--cyan);color:var(--cyan);text-align:left;" onclick="sendVoiceShout(2)">
+          2️⃣ "Step away from my laptop right now!"
+        </button>
+        <button class="modal-btn" style="background:rgba(0,230,118,0.12);border:1px solid var(--green);color:var(--green);text-align:left;" onclick="sendVoiceShout(3)">
+          3️⃣ "I see you on camera! Leave my laptop!"
+        </button>
+        <button class="modal-btn" style="background:rgba(255,214,0,0.12);border:1px solid var(--yellow);color:var(--yellow);text-align:left;" onclick="sendVoiceShout(4)">
+          4️⃣ "Security alert! Police notified!"
+        </button>
+      </div>
+      <div style="margin-top:10px;">
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:6px;">CUSTOM TTS SHOUT:</div>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="customTtsInput" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--cyan);background:#050B14;color:#fff;outline:none;" placeholder="Type custom message in Hindi/English...">
+          <button class="modal-btn" onclick="sendCustomTts()">SPEAK</button>
+        </div>
+      </div>
+      <button class="modal-btn" style="background:none;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;margin-top:4px;" onclick="closeModal('voiceModal')">Close</button>
+    </div>
+  </div>
+
+  <!-- INTRUDER PHOTO LIGHTBOX MODAL -->
+  <div class="modal-overlay" id="photoModal">
+    <div class="modal-box" style="max-width:540px;padding:16px;">
+      <div class="modal-title">📸 Intruder Stealth Snapshot</div>
+      <img id="lightboxPhotoImg" src="" style="width:100%;max-height:60vh;object-fit:contain;border-radius:12px;border:1px solid rgba(255,255,255,0.15);" alt="Capture">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+        <span style="font-size:11px;font-family:var(--mono);color:var(--text-muted);" id="lightboxCaption">Captured by Camera</span>
+        <button class="modal-btn" style="background:none;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;padding:6px 14px;" onclick="closeModal('photoModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GHOST SCREEN VIEWER MODAL -->
+  <div class="modal-overlay" id="screenModal">
+    <div class="modal-box" style="max-width:540px;">
+      <div class="modal-title">📺 Ghost Screen Live Mirror</div>
+      <img id="screenLiveImg" class="screen-stream-img" src="/api/sentry/screen_frame" alt="Laptop Screen">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;font-family:var(--mono);color:var(--cyan);" id="screenFpsText">● Live stream active</span>
+        <button class="modal-btn" style="background:none;border:1px solid rgba(255,255,255,0.2);color:#94a3b8;" onclick="closeGhostScreenModal()">Close Viewer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentState = "STANDBY";
+    let isArmed = false;
+    let cachedPin = localStorage.getItem("sentry_pin") || "";
+    let screenInterval = null;
+
+    // ── PIN AUTHENTICATION ──
+    function checkPinAuth() {
+      if (!cachedPin) {
+        document.getElementById("pinModal").classList.add("open");
+        document.getElementById("pinInput").focus();
+      } else {
+        verifyPin(cachedPin);
+      }
+    }
+
+    async function submitPin() {
+      const pin = document.getElementById("pinInput").value.trim();
+      if (pin.length !== 4) return;
+      const ok = await verifyPin(pin);
+      if (ok) {
+        cachedPin = pin;
+        localStorage.setItem("sentry_pin", pin);
+        document.getElementById("pinModal").classList.remove("open");
+      } else {
+        document.getElementById("pinError").style.display = "block";
+      }
+    }
+
+    async function verifyPin(pin) {
+      try {
+        const res = await fetch("/api/sentry/verify_pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin })
+        });
+        const data = await res.json();
+        return data.success;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // ── STATE POLLING & SYNC ──
+    async function fetchState() {
+      try {
+        const res = await fetch("/api/sentry/state");
+        const data = await res.json();
+        renderState(data);
+      } catch (e) {
+        console.error("State poll error:", e);
+      }
+    }
+
+    function renderState(data) {
+      currentState = data.state;
+      isArmed = data.is_armed;
+
+      const badge = document.getElementById("mainStatusBadge");
+      const label = document.getElementById("statusLabel");
+      const shieldBtn = document.getElementById("shieldBtn");
+      const shieldIcon = document.getElementById("shieldIcon");
+      const shieldText = document.getElementById("shieldStatusText");
+      const shieldSub = document.getElementById("shieldSubText");
+
+      badge.className = "status-badge " + currentState;
+      shieldBtn.className = "shield-btn " + currentState;
+
+      if (currentState === "STANDBY") {
+        label.innerText = "STANDBY";
+        shieldIcon.innerText = "🛡️";
+        shieldText.innerText = "TAP TO ARM";
+        shieldSub.innerText = "5s Smart Grace Timer";
+      } else if (currentState === "ARMING") {
+        label.innerText = `ARMING (${data.arming_remaining}s)`;
+        shieldIcon.innerText = "⏳";
+        shieldText.innerText = `ARMING (${data.arming_remaining}s)`;
+        shieldSub.innerText = "Step away from laptop...";
+      } else if (currentState === "ARMED") {
+        label.innerText = "ARMED";
+        shieldIcon.innerText = "🛡️";
+        shieldText.innerText = "ARMED & WATCHING";
+        shieldSub.innerText = "Tap to Disarm";
+      } else if (currentState === "TRIGGERED") {
+        label.innerText = "🚨 TRIGGERED!";
+        shieldIcon.innerText = "🚨";
+        shieldText.innerText = "INTRUDER ALERT!";
+        shieldSub.innerText = "Tap to Silence / Disarm";
+      }
+
+      // Siren button state
+      const sLabel = document.getElementById("sirenBtnLabel");
+      if (sLabel) {
+        sLabel.innerText = data.is_siren_active ? "Stop Siren" : "Piercing Siren";
+      }
+
+      // Lockdown button state
+      const lockCard = document.getElementById("lockdownCard");
+      const lockLabel = document.getElementById("lockdownLabel");
+      const lockDesc = document.getElementById("lockdownDesc");
+      if (lockCard && lockLabel) {
+        if (data.is_lockdown_active) {
+          lockCard.classList.add("active-lockdown");
+          lockLabel.innerText = "🛑 Unlock Blackout";
+          lockDesc.innerText = "Blackout ACTIVE • Tap to release";
+        } else {
+          lockCard.classList.remove("active-lockdown");
+          lockLabel.innerText = "Emergency Lockdown";
+          lockDesc.innerText = "Fullscreen pitch blackout shield";
+        }
+      }
+
+      // Latest Photo
+      if (data.last_photo_url) {
+        const pImg = document.getElementById("intruderPhotoImg");
+        const pholder = document.getElementById("noPhotoPlaceholder");
+        const pCard = document.getElementById("photoAlertCard");
+        pImg.src = data.last_photo_url + "?t=" + Date.now();
+        pImg.style.display = "block";
+        pholder.style.display = "none";
+        pCard.classList.add("has-photo");
+        document.getElementById("photoTimeBadge").innerText = "Captured Just Now";
+      }
+
+      // Event List
+      renderEvents(data.events || []);
+    }
+
+    function renderEvents(events) {
+      const container = document.getElementById("eventList");
+      if (!events.length) {
+        container.innerHTML = `<div style="font-size:11px;font-family:var(--mono);color:var(--text-muted);text-align:center;padding:12px;">No intruder events recorded yet. Laptop is secure.</div>`;
+        return;
+      }
+
+      container.innerHTML = events.map(e => {
+        let tagColor = 'var(--cyan)';
+        let tagBg = 'rgba(0, 229, 255, 0.08)';
+        if (e.severity === 'CRITICAL') {
+          tagColor = 'var(--red)';
+          tagBg = 'rgba(255, 51, 102, 0.12)';
+        } else if (e.severity === 'HIGH') {
+          tagColor = 'var(--yellow)';
+          tagBg = 'rgba(255, 214, 0, 0.12)';
+        }
+
+        let photoThumb = '';
+        if (e.photo_url) {
+          photoThumb = `
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;" onclick="openPhotoDirect('${e.photo_url}')">
+              <img src="${e.photo_url}" style="width:42px;height:32px;border-radius:6px;object-fit:cover;border:1px solid var(--red);" alt="Snap">
+              <span style="font-size:10px;font-family:var(--mono);color:var(--red);text-decoration:underline;">📸 View Intruder Photo</span>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="event-item ${e.severity || 'MEDIUM'}" style="border-left: 3.5px solid ${tagColor}; background: ${tagBg};">
+            <div class="evt-top">
+              <span class="evt-title" style="color:#fff;font-weight:800;font-size:12.5px;">${e.title}</span>
+              <span class="evt-time" style="color:${tagColor};font-weight:700;">${e.timestamp}</span>
+            </div>
+            <div class="evt-details" style="font-size:11px;color:#e2e8f0;margin-top:2px;">${e.details}</div>
+            ${photoThumb}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function openPhotoDirect(url) {
+      const img = document.getElementById("lightboxPhotoImg");
+      const modal = document.getElementById("photoModal");
+      if (img && modal) {
+        img.src = url;
+        modal.classList.add("open");
+      }
+    }
+
+    function openPhotoLightbox() {
+      const pImg = document.getElementById("intruderPhotoImg");
+      if (pImg && pImg.src && pImg.style.display !== "none") {
+        openPhotoDirect(pImg.src);
+      }
+    }
+
+    // ── ARM / DISARM TOGGLE ──
+    async function toggleArmState() {
+      const endpoint = (currentState === "STANDBY") ? "/api/sentry/arm" : "/api/sentry/disarm";
+      try {
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: cachedPin })
+        });
+        fetchState();
+      } catch (e) {
+        console.error("Arm toggle error:", e);
+      }
+    }
+
+    // ── REMOTE ACTIONS ──
+    async function triggerAction(action, extra = {}) {
+      try {
+        const res = await fetch("/api/sentry/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, pin: cachedPin, ...extra })
+        });
+        const data = await res.json();
+        fetchState();
+      } catch (e) {
+        console.error("Action error:", e);
+      }
+    }
+
+    async function clearLogs() {
+      try {
+        await fetch("/api/sentry/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "clear_logs", pin: cachedPin })
+        });
+        fetchState();
+      } catch (e) {}
+    }
+
+    // ── GHOST SCREEN LIVE STREAM ──
+    function openGhostScreenModal() {
+      document.getElementById("screenModal").classList.add("open");
+      const img = document.getElementById("screenLiveImg");
+      if (screenInterval) clearInterval(screenInterval);
+      screenInterval = setInterval(() => {
+        img.src = "/api/sentry/screen_frame?t=" + Date.now();
+      }, 400);
+    }
+
+    function closeGhostScreenModal() {
+      document.getElementById("screenModal").classList.remove("open");
+      if (screenInterval) clearInterval(screenInterval);
+    }
+
+    // ── PASSWORD CHANGE ──
+    function openPasswordModal() {
+      document.getElementById("passModal").classList.add("open");
+      document.getElementById("newPassInput").focus();
+    }
+    function generateRandomPass() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789#@!";
+      let pass = "";
+      for (let i = 0; i < 8; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+      document.getElementById("newPassInput").value = pass;
+    }
+    async function submitNewPass() {
+      const newPass = document.getElementById("newPassInput").value.trim();
+      if (!newPass) return;
+      try {
+        const res = await fetch("/api/sentry/change_password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: cachedPin, new_password: newPass })
+        });
+        const data = await res.json();
+        alert(data.message || (data.success ? "Password changed!" : "Failed to change password"));
+        closeModal("passModal");
+      } catch (e) {
+        alert("Error changing password");
+      }
+    }
+
+    // ── VOICE SHOUTS & TTS ──
+    function openVoiceShoutModal() {
+      document.getElementById("voiceModal").classList.add("open");
+    }
+    async function sendVoiceShout(idx) {
+      await triggerAction("voice_warning", { shout_index: idx });
+      closeModal("voiceModal");
+    }
+    async function sendCustomTts() {
+      const text = document.getElementById("customTtsInput").value.trim();
+      if (!text) return;
+      try {
+        await fetch("/api/sentry/speak_custom", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: cachedPin, text })
+        });
+        document.getElementById("customTtsInput").value = "";
+        closeModal("voiceModal");
+      } catch (e) {}
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove("open");
+    }
+
+    // ── INITIALIZATION ──
+    window.addEventListener("load", () => {
+      checkPinAuth();
+      fetchState();
+      setInterval(fetchState, 1500);
+    });
+  </script>
+</body>
+</html>
