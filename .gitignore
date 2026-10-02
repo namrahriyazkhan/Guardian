@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+dist/
+build/
+Output/
+*.exe
+*.dll
+.env
+guardian_running.lock
