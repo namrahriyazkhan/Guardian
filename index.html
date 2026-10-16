@@ -142,18 +142,18 @@ header{position:sticky;top:0;z-index:180;height:56px;
   box-shadow:0 1px 0 rgba(255,255,255,.9),var(--sh-sm);}
 
 /* banner-active adjustments */
-body.banner-active #sidebar{top:38px;}
-body.banner-active header{top:38px;}
-body.banner-active .tab-nav{top:94px;}
+body.banner-active #sidebar{top:0;}
+body.banner-active header{top:0;}
+body.banner-active .tab-nav{top:0;}
 
 
 /* ── PAGES ── */
 .tab-page{display:none;}
 .tab-page.active{display:block;}
-.page-wrap{max-width:1500px;margin:0 auto;padding:1.5rem 2rem 260px 2rem;position:relative;}
+.page-wrap{max-width:1500px;margin:0 auto;padding:1.6rem 2rem 260px 2rem;position:relative;}
 .page-header{display:flex;align-items:flex-end;justify-content:space-between;
-  margin-bottom:1.4rem;padding-bottom:1rem;border-bottom:1px solid rgba(59,105,200,.12);}
-.page-header h1{font-size:24px;font-weight:800;letter-spacing:-.03em;color:var(--text);}
+  margin-top:0.25rem;margin-bottom:1.4rem;padding-bottom:1rem;border-bottom:1px solid rgba(59,105,200,.12);}
+.page-header h1{font-size:24px;font-weight:800;letter-spacing:-.03em;color:var(--text);margin:0 0 2px 0;line-height:1.25;}
 .page-header h1 span{color:var(--accent);}
 .page-header p{font-family:var(--mono);font-size:12px;color:var(--muted);
   letter-spacing:.07em;text-transform:uppercase;margin-top:3px;font-weight:600;}
@@ -562,19 +562,9 @@ body.banner-active .tab-nav{top:94px;}
   align-items:center;gap:10px;box-shadow:var(--sh-sm);text-align:center;}
 .simulate-btn-wrap p{font-family:var(--mono);font-size:12px;color:var(--muted);max-width:280px;line-height:1.7;}
 
-/* ── CRITICAL BANNER ── */
-#criticalBanner{display:none;position:fixed;top:0;left:0;right:0;z-index:9500;
-  background:linear-gradient(90deg,#7f0e1e,#b91c3c,#7f0e1e);
-  background-size:200% 100%;
-  border-bottom:2px solid #FB7185;
-  padding:0 2rem;height:38px;
-  font-family:var(--mono);
-  font-size:12px;font-weight:700;color:#fff;letter-spacing:.12em;text-align:center;
-  display:none;align-items:center;justify-content:center;
-  animation:flashBanner 1.2s ease-in-out infinite alternate,bannerSlide 3s linear infinite;}
-@keyframes flashBanner{from{opacity:.82;filter:brightness(.95)}to{opacity:1;filter:brightness(1.08)}}
-@keyframes bannerSlide{0%{background-position:0% 0%}100%{background-position:200% 0%}}
-body.banner-active{padding-top:38px;}
+/* ── CRITICAL BANNER (REMOVED) ── */
+#criticalBanner{display:none!important;visibility:hidden!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important;pointer-events:none!important;}
+body.banner-active{padding-top:0!important;}
 
 /* ── POPUPS ── */
 /* ── ACTION SMALL POPUP (bottom-left) ── */
@@ -2687,7 +2677,7 @@ body.banner-active{padding-top:38px;}
 </head>
 <body>
 
-<div id="criticalBanner">🚨 SYSTEM UNDER THREAT — CRITICAL SECURITY ALERT — THREAT SCORE CRITICAL 🚨</div>
+<div id="criticalBanner" style="display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;"></div>
 
 <div id="sidebar">
   <!-- Logo row: ☰ | 🛡 GUARDIAN -->
@@ -4105,8 +4095,10 @@ function updateThreatUI(){
   document.getElementById('mTrusted').textContent=THREAT.trusted;
   document.getElementById('mThreat').textContent=sc;
   var body=document.body,banner=document.getElementById('criticalBanner');
-  if(sc>=70){body.classList.add('critical-mode');body.classList.add('banner-active');banner.style.display='flex';}
-  else{body.classList.remove('critical-mode');body.classList.remove('banner-active');banner.style.display='none';}
+  if(banner){banner.style.display='none';}
+  body.classList.remove('banner-active');
+  if(sc>=70){body.classList.add('critical-mode');}
+  else{body.classList.remove('critical-mode');}
   // Update sidebar chatbot badge
   var sidebarBadge=document.getElementById('sidebarAiBadge');
   var aiBtn=document.getElementById('sidebarAiBtn');
@@ -4195,7 +4187,11 @@ function fetchBackendData(){
   fetch('/get_report').then(function(r){return r.json();}).then(function(data){
     backendData.running=data.running||[];backendData.suspicious=data.suspicious||[];backendData.high_risk=data.high_risk||[];
     if(data.profile_summary&&Object.keys(data.profile_summary).length>0){_cachedProfiles=Object.assign({},_cachedProfiles,data.profile_summary);renderProfileCards(_cachedProfiles);}
-    renderBackend();guardianUpdateCtx();
+    var maxThreat=0;
+    (backendData.high_risk||[]).forEach(function(h){var sv=typeof h==='object'&&h.severity?h.severity:85;if(sv>maxThreat)maxThreat=sv;});
+    (backendData.suspicious||[]).forEach(function(s){var sv=typeof s==='object'&&s.severity?s.severity:55;if(sv>maxThreat)maxThreat=sv;});
+    if(maxThreat>0){THREAT.score=Math.max(THREAT.score,maxThreat);}
+    updateThreatUI();renderBackend();guardianUpdateCtx();
   }).catch(function(e){console.warn('Backend fetch:',e);});
 }
 function startScan(){

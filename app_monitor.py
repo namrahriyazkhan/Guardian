@@ -217,19 +217,23 @@ def apply_context(app_name, score, reasons):
 # ── Feature extraction ────────────────────────────────────────────────────────
 def extract_features(process):
     try:
-        cpu     = process.cpu_percent(interval=0.1)
+        cpu     = process.cpu_percent(interval=None)
         memory  = process.memory_info().rss / (1024 * 1024)
         threads = process.num_threads()
         return [cpu, memory, threads]
-    except:
-        return [0, 0, 0]
+    except Exception:
+        return [0.0, 0.0, 1]
 
 # ── Train model ───────────────────────────────────────────────────────────────
 def train_model():
     data = []
-    for proc in psutil.process_iter():
-        try: data.append(extract_features(proc))
-        except: pass
+    for proc in psutil.process_iter(['name']):
+        try:
+            data.append(extract_features(proc))
+        except Exception:
+            pass
+    if len(data) < 5:
+        data = [[0.5, 30.0, 4], [1.0, 50.0, 8], [2.0, 80.0, 12], [0.1, 15.0, 2], [5.0, 120.0, 16]]
     data       = np.array(data)
     scaler     = StandardScaler()
     ds         = scaler.fit_transform(data)
@@ -239,143 +243,171 @@ def train_model():
     std  = np.std(data,  axis=0) + 1e-5
     return model, scaler, mean, std
 
-print("⚙️  Training ML model...")
-model, scaler, mean, std = train_model()
-print("✅ Model ready!\n")
-
 # ── Memory + Trust helpers ────────────────────────────────────────────────────
 def update_memory(app):
-    app_memory[app] = app_memory.get(app, 0) + 1
-    with open(MEMORY_FILE, "w") as f: json.dump(app_memory, f)
+    key = app.lower()
+    app_memory[key] = app_memory.get(key, 0) + 1
+    try:
+        with open(MEMORY_FILE, "w") as f: json.dump(app_memory, f)
+    except Exception:
+        pass
 
 def update_trust(app, severity):
-    if app not in TRUSTED_APPS: TRUSTED_APPS[app] = 0
-    TRUSTED_APPS[app] += (1 if severity < 30 else -1)
-    TRUSTED_APPS[app]  = max(-5, min(10, TRUSTED_APPS[app]))
+    key = app.lower()
+    if key not in TRUSTED_APPS: TRUSTED_APPS[key] = 0
+    TRUSTED_APPS[key] += (1 if severity < 30 else -1)
+    TRUSTED_APPS[key]  = max(-5, min(10, TRUSTED_APPS[key]))
     save_trust()
 
 # ── Main scan loop ────────────────────────────────────────────────────────────
-_profile_save_counter = 0
-
-while True:
-    # Reload block/kill/trust from disk so Flask changes take effect
-    BLOCKED_APPS = load_set(BLOCK_FILE)
-    KILLED_APPS  = load_set(KILLED_FILE)
-    TRUSTED_APPS = load_dict(TRUST_FILE)
-
-    running_apps    = []
-    suspicious_apps = []
-    high_risk_apps  = []
-    seen            = set()
-
-    for proc in psutil.process_iter(['name']):
-        try:
-            app = proc.info['name']
-            if not app: continue
-            al  = app.lower()
-            if al in PROTECTED_SYSTEM_APPS: continue
-            if al in BLOCKED_APPS: continue
-            if al in KILLED_APPS:  continue
-            if al not in seen:
-                running_apps.append((app, proc))
-                seen.add(al)
-        except: pass
-
-    print(f"\n[Monitor] Running: {len(running_apps)} apps\nScanning...\n")
-
-    for app, proc in running_apps:
-        try:
-            update_memory(app)
-            features = extract_features(proc)
-            cpu, memory, threads = features
-
-            update_profile(app, cpu, memory, threads)
-
-            scaled     = scaler.transform([features])
-            prediction = model.predict(scaled)[0]
-
-            reasons = []
-            score   = 0
-
-            if prediction == -1:
-                reasons.append("ML anomaly detected (IsolationForest)")
-                score += 2
-
-            if cpu > mean[0] * 2:
-                reasons.append(f"CPU spike ({cpu:.1f}% vs mean {mean[0]:.1f}%)")
-                score += 2
-
-            if memory > mean[1] * 2:
-                reasons.append(f"High memory ({memory:.0f}MB vs mean {mean[1]:.0f}MB)")
-                score += 2
-
-            if threads > mean[2] * 2:
-                reasons.append(f"Thread spike ({threads} vs mean {mean[2]:.0f})")
-                score += 2
-
-            freq = app_memory.get(app, 0)
-            if freq <= 2:
-                reasons.append("New / rare app (seen ≤2 times)")
-                score += 1
-
-            # Behavior profiling violations
-            bv = check_behavior_violation(app, cpu, memory, threads)
-            for v in bv:
-                reasons.append(f"⚠ Behavior violation: {v}")
-                score += 2
-
-            # Context-aware adjustment
-            score, reasons = apply_context(app, score, reasons)
-
-            severity   = round((score / 9) * 100, 2)
-            trust_val  = TRUSTED_APPS.get(app, 0)
-            is_trusted = isinstance(trust_val, (int, float)) and trust_val >= 5
-
-            update_trust(app, severity)
-
-            if not is_trusted and score >= 2:
-                suspicious_apps.append((app, reasons, severity))
-            if not is_trusted and score >= 4:
-                high_risk_apps.append((app, reasons, severity))
-
-        except Exception as e:
-            pass
-
-    # Save profiles every 6 cycles (~30 s)
-    _profile_save_counter += 1
-    if _profile_save_counter >= 6:
-        save_profiles()
-        _profile_save_counter = 0
-
-    # Build profile summary for dashboard
-    profile_summary = {}
-    for k, p in app_profiles.items():
-        if p.get("seen_count", 0) >= 1:
-            profile_summary[k] = {
-                "avg_cpu":           p.get("avg_cpu",           0),
-                "peak_cpu":          p.get("peak_cpu",          0),
-                "avg_mem":           p.get("avg_mem",           0),
-                "peak_mem":          p.get("peak_mem",          0),
-                "avg_threads":       p.get("avg_threads",       0),
-                "seen_count":        p.get("seen_count",        0),
-                "typical_hours_min": p.get("typical_hours_min", 0),
-                "typical_hours_max": p.get("typical_hours_max", 23),
-            }
-
-    # Send to Flask
+def main_loop():
+    print("⚙️  Training ML model...")
     try:
-        payload = {
-            "running":    [a for a, _ in running_apps],
-            "suspicious": [{"app":a,"reasons":r,"severity":s} for a,r,s in suspicious_apps],
-            "high_risk":  [{"app":a,"reasons":r,"severity":s} for a,r,s in high_risk_apps],
-            "trusted_apps":    TRUSTED_APPS,
-            "profile_summary": profile_summary,
-        }
-        resp = requests.post(FLASK_UPDATE_URL, json=payload, timeout=3)
-        print(f"[Monitor] 📡 Sent — suspicious:{len(suspicious_apps)} high:{len(high_risk_apps)}")
-    except requests.exceptions.ConnectionError:
-        print("[Monitor] ⚠ Flask not reachable — retrying next cycle")
+        model, scaler, mean, std = train_model()
+        print("✅ Model ready!\n")
     except Exception as e:
-        print(f"[Monitor] Send error: {e}")
+        print(f"ML model training note: {e}")
+        model, scaler, mean, std = None, None, np.array([1.0, 50.0, 5.0]), np.array([1.0, 50.0, 5.0])
 
-    time.sleep(5)
+    _profile_save_counter = 0
+
+    while True:
+        try:
+            # Reload block/kill/trust from disk so Flask changes take effect
+            BLOCKED_APPS = load_set(BLOCK_FILE)
+            KILLED_APPS  = load_set(KILLED_FILE)
+            TRUSTED_APPS = load_dict(TRUST_FILE)
+
+            running_apps    = []
+            suspicious_apps = []
+            high_risk_apps  = []
+            seen            = set()
+
+            for proc in psutil.process_iter(['name']):
+                try:
+                    app = proc.info['name']
+                    if not app: continue
+                    al  = app.lower()
+                    if al in PROTECTED_SYSTEM_APPS: continue
+                    if al in BLOCKED_APPS: continue
+                    if al in KILLED_APPS:  continue
+                    if al not in seen:
+                        running_apps.append((app, proc))
+                        seen.add(al)
+                except Exception:
+                    pass
+
+            for app, proc in running_apps:
+                try:
+                    al = app.lower()
+                    update_memory(app)
+                    features = extract_features(proc)
+                    cpu, memory, threads = features
+
+                    update_profile(app, cpu, memory, threads)
+
+                    prediction = 1
+                    if model is not None and scaler is not None:
+                        try:
+                            scaled     = scaler.transform([features])
+                            prediction = model.predict(scaled)[0]
+                        except Exception:
+                            prediction = 1
+
+                    reasons = []
+                    score   = 0
+
+                    if al in HIGH_CONTEXT_APPS:
+                        score = max(score, 8)
+                        reasons.append("Known high-risk security threat signature matched")
+
+                    if prediction == -1:
+                        reasons.append("ML anomaly detected (IsolationForest)")
+                        score += 2
+
+                    if cpu > mean[0] * 2 and cpu > 15:
+                        reasons.append(f"CPU spike ({cpu:.1f}% vs mean {mean[0]:.1f}%)")
+                        score += 2
+
+                    if memory > mean[1] * 2 and memory > 300:
+                        reasons.append(f"High memory ({memory:.0f}MB vs mean {mean[1]:.0f}MB)")
+                        score += 2
+
+                    if threads > mean[2] * 2 and threads > 25:
+                        reasons.append(f"Thread spike ({threads} vs mean {mean[2]:.0f})")
+                        score += 2
+
+                    freq = app_memory.get(al, 0)
+                    if freq <= 2 and al not in LOW_CONTEXT_APPS:
+                        reasons.append("New / rare executable on system")
+                        score += 1
+
+                    # Behavior profiling violations
+                    bv = check_behavior_violation(app, cpu, memory, threads)
+                    for v in bv:
+                        reasons.append(f"⚠ Behavior violation: {v}")
+                        score += 2
+
+                    # Context-aware adjustment
+                    score, reasons = apply_context(app, score, reasons)
+
+                    severity   = round((score / 9) * 100, 2)
+                    trust_val  = TRUSTED_APPS.get(al, 0)
+                    is_trusted = isinstance(trust_val, (int, float)) and trust_val >= 5 and al not in HIGH_CONTEXT_APPS
+
+                    update_trust(app, severity)
+
+                    if not is_trusted and (score >= 2 or al in HIGH_CONTEXT_APPS or severity >= 40):
+                        suspicious_apps.append((app, reasons, severity))
+                    if not is_trusted and (score >= 4 or al in HIGH_CONTEXT_APPS or severity >= 70):
+                        high_risk_apps.append((app, reasons, severity))
+
+                except Exception:
+                    pass
+
+            # Save profiles every 6 cycles (~30 s)
+            _profile_save_counter += 1
+            if _profile_save_counter >= 6:
+                try:
+                    save_profiles()
+                except Exception:
+                    pass
+                _profile_save_counter = 0
+
+            # Build profile summary for dashboard
+            profile_summary = {}
+            for k, p in app_profiles.items():
+                if p.get("seen_count", 0) >= 1:
+                    profile_summary[k] = {
+                        "avg_cpu":           p.get("avg_cpu",           0),
+                        "peak_cpu":          p.get("peak_cpu",          0),
+                        "avg_mem":           p.get("avg_mem",           0),
+                        "peak_mem":          p.get("peak_mem",          0),
+                        "avg_threads":       p.get("avg_threads",       0),
+                        "seen_count":        p.get("seen_count",        0),
+                        "typical_hours_min": p.get("typical_hours_min", 0),
+                        "typical_hours_max": p.get("typical_hours_max", 23),
+                    }
+
+            # Send to Flask
+            try:
+                payload = {
+                    "running":    [a for a, _ in running_apps],
+                    "suspicious": [{"app":a,"reasons":r,"severity":s} for a,r,s in suspicious_apps],
+                    "high_risk":  [{"app":a,"reasons":r,"severity":s} for a,r,s in high_risk_apps],
+                    "trusted_apps":    TRUSTED_APPS,
+                    "profile_summary": profile_summary,
+                }
+                resp = requests.post(FLASK_UPDATE_URL, json=payload, timeout=3)
+            except requests.exceptions.ConnectionError:
+                pass
+            except Exception as e:
+                print(f"[Monitor] Send notice: {e}")
+
+        except Exception as err:
+            print(f"[Monitor] Cycle notice: {err}")
+
+        time.sleep(5)
+
+if __name__ == "__main__":
+    main_loop()

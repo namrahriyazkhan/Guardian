@@ -24,15 +24,57 @@ print("=" * 60)
 print("  [BUILD] BUILDING GUARDIAN STANDALONE EXECUTABLE WITH PYINSTALLER")
 print("=" * 60)
 
-# 1. Clean previous build / dist directories if needed
+# 1. Terminate any running GUARDIAN processes to free file locks
+try:
+    import psutil
+    curr_pid = os.getpid()
+    for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+        try:
+            if proc.pid == curr_pid:
+                continue
+            name = (proc.info.get('name') or '').lower()
+            exe = (proc.info.get('exe') or '').lower()
+            cmdline = ' '.join(proc.info.get('cmdline') or []).lower()
+            if 'guardian.exe' in name or 'guardian.exe' in exe or ('guardian.py' in cmdline and 'python' in name):
+                print(f"Closing running process: {proc.info.get('name')} (PID: {proc.pid})")
+                proc.kill()
+        except Exception:
+            pass
+except Exception:
+    pass
+
+import time
+time.sleep(1)
+
+def safe_rmtree(path):
+    if not os.path.exists(path):
+        return
+    import stat
+    for root, dirs, files in os.walk(path, topdown=False):
+        for f in files:
+            p = os.path.join(root, f)
+            try:
+                os.chmod(p, stat.S_IWRITE)
+                os.remove(p)
+            except Exception:
+                pass
+        for d in dirs:
+            p = os.path.join(root, d)
+            try:
+                os.rmdir(p)
+            except Exception:
+                pass
+    try:
+        shutil.rmtree(path, ignore_errors=True)
+    except Exception:
+        pass
+
+# 2. Clean previous build / dist directories if needed
 for d in ["build", "dist"]:
     p = os.path.join(BASE_DIR, d)
     if os.path.exists(p):
         print(f"Cleaning {d}/...")
-        try:
-            shutil.rmtree(p, ignore_errors=True)
-        except Exception as e:
-            print(f"Notice: {e}")
+        safe_rmtree(p)
 
 # 2. Data files to collect (src;dst)
 data_files = [
@@ -119,12 +161,24 @@ for hi in hidden_imports:
 
 icon_path = os.path.join(BASE_DIR, "guardian_logo.ico")
 
+import tempfile
+temp_work = os.path.join(tempfile.gettempdir(), "pyi_guardian_work")
+temp_spec = os.path.join(tempfile.gettempdir(), "pyi_guardian_spec")
+temp_dist = os.path.join(tempfile.gettempdir(), "pyi_guardian_dist")
+os.makedirs(temp_work, exist_ok=True)
+os.makedirs(temp_spec, exist_ok=True)
+os.makedirs(temp_dist, exist_ok=True)
+
 cmd = [
     sys.executable, "-m", "PyInstaller",
     "--name=GUARDIAN",
     "--noconfirm",
+    "--clean",
     "--onedir",
     "--windowed",
+    "--workpath", temp_work,
+    "--specpath", temp_spec,
+    "--distpath", temp_dist,
 ]
 
 if os.path.exists(icon_path):
@@ -143,6 +197,12 @@ if res.returncode != 0:
     sys.exit(res.returncode)
 
 dist_folder = os.path.join(BASE_DIR, "dist", "GUARDIAN")
+os.makedirs(os.path.join(BASE_DIR, "dist"), exist_ok=True)
+built_src = os.path.join(temp_dist, "GUARDIAN")
+if os.path.exists(built_src):
+    print("Copying compiled bundle to dist/GUARDIAN...")
+    shutil.copytree(built_src, dist_folder, dirs_exist_ok=True)
+
 internal_folder = os.path.join(dist_folder, "_internal")
 
 # Ensure assets are directly accessible in dist/GUARDIAN root as well as _internal
@@ -165,4 +225,19 @@ for src, dst in data_files:
             d_int = os.path.join(internal_folder, src)
             shutil.copy2(s, d_int)
 
-print("\n✅ PyInstaller build complete! Dist output at: dist/GUARDIAN")
+# Synchronize directly to the installed application path (where Desktop shortcut points)
+installed_dirs = [
+    os.path.expandvars(r"%LOCALAPPDATA%\Programs\GUARDIAN"),
+    os.path.expandvars(r"%PROGRAMFILES%\GUARDIAN"),
+    os.path.expandvars(r"%ProgramFiles(x86)%\GUARDIAN")
+]
+for inst in installed_dirs:
+    if os.path.exists(inst):
+        print(f"Syncing updated bundle to installed directory: {inst}...")
+        try:
+            shutil.copytree(dist_folder, inst, dirs_exist_ok=True)
+            print(f"✅ Successfully updated {inst}")
+        except Exception as e:
+            print(f"Notice syncing to {inst}: {e}")
+
+print("\n✅ PyInstaller build complete! Standalone and Desktop Shortcut targets updated!")

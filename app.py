@@ -128,16 +128,49 @@ fatigue_state = {
 # ── Thread-safe lock ─────────────────────────────────────────────────────────
 data_lock = threading.Lock()
 
+HIGH_RISK_POOL = [
+    {"app": "trojan.exe",        "reasons": ["⚠ Behavior violation: Running at unusual time", "Thread explosion detected"],               "severity": 92},
+    {"app": "keylogger.exe",     "reasons": ["Keystroke capture detected", "Hidden process — not in task list"],                          "severity": 95},
+    {"app": "ransomware.exe",    "reasons": ["Mass file encryption started", "Shadow copy deletion attempt"],                              "severity": 98},
+    {"app": "rootkit.dll",       "reasons": ["Kernel memory injection detected", "AV process termination attempt"],                        "severity": 90},
+    {"app": "cryptominer.exe",   "reasons": ["CPU pegged at 99% continuously", "Outbound connection to mining pool"],                      "severity": 85},
+    {"app": "spyware.exe",       "reasons": ["Screen capture every 5 s", "Clipboard snooping detected"],                                   "severity": 88},
+    {"app": "backdoor.exe",      "reasons": ["Reverse shell spawned on port 4444", "Persistence via registry Run key"],                    "severity": 94},
+    {"app": "worm.exe",          "reasons": ["LAN scan on 192.168.x.x", "Self-replicating to network shares"],                             "severity": 91},
+    {"app": "malware.exe",       "reasons": ["Injected into explorer.exe", "Deleted own original file after launch"],                      "severity": 89},
+    {"app": "exploit_kit.exe",   "reasons": ["CVE-2024-1234 exploitation attempt", "Privilege escalation via token impersonation"],        "severity": 96},
+]
+
+SUSPICIOUS_POOL = [
+    {"app": "weird_script.exe",  "reasons": ["ML anomaly detected", "CPU spike (85% vs normal 10%)"],                                     "severity": 58},
+    {"app": "svchost32.exe",     "reasons": ["Impersonating svchost.exe", "Unusual parent process: cmd.exe"],                              "severity": 62},
+    {"app": "updater_fake.exe",  "reasons": ["Connects to unknown IP 45.33.32.156", "No digital signature"],                              "severity": 55},
+    {"app": "psexec_copy.exe",   "reasons": ["Lateral movement tool signature", "Admin share access attempt"],                             "severity": 70},
+    {"app": "powershell_enc.exe","reasons": ["Base64 encoded command detected", "Downloaded 3 MB from pastebin.com"],                      "severity": 65},
+    {"app": "rundll_hook.exe",   "reasons": ["DLL hijacking path found", "Unsigned DLL loaded into trusted process"],                      "severity": 60},
+    {"app": "netcat.exe",        "reasons": ["Raw TCP listener on port 1337", "Unusual outbound traffic pattern"],                         "severity": 57},
+    {"app": "mimikatz_mod.exe",  "reasons": ["LSASS memory read attempt", "Credential dump pattern matched"],                              "severity": 75},
+    {"app": "browser_ext.exe",   "reasons": ["Intercepting HTTPS traffic", "Injected into Chrome renderer process"],                      "severity": 53},
+    {"app": "macro_runner.exe",  "reasons": ["Office macro spawned shell", "Child process: cmd.exe /c powershell"],                        "severity": 68},
+]
+
+_sim_attack_active = True
+_sim_data = {
+    "high_risk":  [dict(x) for x in HIGH_RISK_POOL],
+    "suspicious": [dict(x) for x in SUSPICIOUS_POOL]
+}
+
 # ── Shared live data ─────────────────────────────────────────────────────────
-latest_data = {"running":[],"suspicious":[],"high_risk":[],"profile_summary":{}}
+latest_data = {
+    "running":    [x["app"] for x in HIGH_RISK_POOL + SUSPICIOUS_POOL],
+    "suspicious": [dict(x) for x in SUSPICIOUS_POOL],
+    "high_risk":  [dict(x) for x in HIGH_RISK_POOL],
+    "profile_summary": {}
+}
 
 # Behavior violation alerts
 behavior_alerts     = []
 MAX_BEHAVIOR_ALERTS = 50
-
-# Simulate attack state
-_sim_attack_active = False
-_sim_data          = {"suspicious":[],"high_risk":[]}
 
 # ════════════════════════════════════════════════════════════════
 # ── Critical Escalation State ───────────────────────────────────
@@ -323,7 +356,15 @@ def custom_static(filename):
     return "Asset not found", 404
 
 SAFE_APPS      = {"chrome.exe","msedge.exe","explorer.exe","code.exe","python.exe","duckduckgo.exe","duckduckgo.webview.exe"} | PROTECTED_SYSTEM_APPS
-HIGH_RISK_APPS = {"trojan.exe","malware.exe","ransomware.exe","exploit_kit.exe","keylogger.exe","backdoor.exe","cryptominer.exe","calculatorapp.exe","windowscamera.exe"}
+HIGH_RISK_APPS = {
+    "trojan.exe","malware.exe","ransomware.exe","exploit_kit.exe","keylogger.exe",
+    "backdoor.exe","cryptominer.exe","calculatorapp.exe","windowscamera.exe",
+    "mimikatz.exe","nc.exe","ncat.exe","netcat.exe","meterpreter.exe",
+    "payload.exe","xmrig.exe","minerd.exe","unknown.exe","temp.exe","tmp.exe",
+    "svchost32.exe","rootkit.dll","spyware.exe","worm.exe","weird_script.exe",
+    "psexec_copy.exe","updater_fake.exe","mimikatz_mod.exe","powershell_enc.exe",
+    "rundll_hook.exe","browser_ext.exe","macro_runner.exe"
+}
 
 
 @app.route("/splash")
@@ -351,30 +392,41 @@ def update_report():
         incoming_sus     = [o for o in data.get("suspicious",[]) if not is_hidden(o.get("app","").lower())]
         incoming_hi      = [o for o in data.get("high_risk",[])  if not is_hidden(o.get("app","").lower())]
 
-        # If simulation or active registered threats exist, retain them
-        if _sim_attack_active:
-            existing_sus_names = {o.get("app","").lower() for o in incoming_sus}
-            for s in _sim_data.get("suspicious", []):
-                al = s.get("app","").lower()
-                if al and al not in existing_sus_names and not is_hidden(al):
-                    incoming_sus.append(s)
-                    existing_sus_names.add(al)
+        # Merge with existing active threats
+        existing_sus_dict = {o.get("app","").lower(): o for o in latest_data.get("suspicious", []) if not is_hidden(o.get("app","").lower())}
+        existing_hi_dict  = {o.get("app","").lower(): o for o in latest_data.get("high_risk", []) if not is_hidden(o.get("app","").lower())}
 
-            existing_hi_names = {o.get("app","").lower() for o in incoming_hi}
-            for h in _sim_data.get("high_risk", []):
-                al = h.get("app","").lower()
-                if al and al not in existing_hi_names and not is_hidden(al):
-                    incoming_hi.append(h)
-                    existing_hi_names.add(al)
+        for s in incoming_sus:
+            al = s.get("app","").lower()
+            if al and not is_hidden(al):
+                existing_sus_dict[al] = s
 
-            for item in incoming_sus + incoming_hi:
-                iapp = item.get("app")
-                if iapp and iapp not in incoming_running and not is_hidden(iapp.lower()):
-                    incoming_running.append(iapp)
+        for h in incoming_hi:
+            al = h.get("app","").lower()
+            if al and not is_hidden(al):
+                existing_hi_dict[al] = h
+
+        for s in _sim_data.get("suspicious", []):
+            al = s.get("app","").lower()
+            if al and not is_hidden(al):
+                existing_sus_dict[al] = s
+
+        for h in _sim_data.get("high_risk", []):
+            al = h.get("app","").lower()
+            if al and not is_hidden(al):
+                existing_hi_dict[al] = h
+
+        final_sus = list(existing_sus_dict.values())
+        final_hi  = list(existing_hi_dict.values())
+
+        for item in final_sus + final_hi:
+            iapp = item.get("app")
+            if iapp and iapp not in incoming_running and not is_hidden(iapp.lower()):
+                incoming_running.append(iapp)
 
         latest_data["running"]    = incoming_running
-        latest_data["suspicious"] = incoming_sus
-        latest_data["high_risk"]  = incoming_hi
+        latest_data["suspicious"] = final_sus
+        latest_data["high_risk"]  = final_hi
 
         if "profile_summary" in data and data["profile_summary"]:
             latest_data["profile_summary"].update(data["profile_summary"])
@@ -467,9 +519,15 @@ def register_threats_batch():
                 
     return jsonify({"status": "registered_batch", "high_risk_count": len(latest_data["high_risk"]), "suspicious_count": len(latest_data["suspicious"])})
 
-@app.route("/scan_processes", methods=["GET", "POST"])
-def scan_processes_route():
+def _evaluate_live_processes():
     procs = []
+    suspicious = []
+    high_risk = []
+    seen = set()
+
+    hr_lookup  = {x["app"].lower(): x for x in HIGH_RISK_POOL}
+    sus_lookup = {x["app"].lower(): x for x in SUSPICIOUS_POOL}
+
     try:
         for proc in psutil.process_iter(['name']):
             try:
@@ -477,39 +535,129 @@ def scan_processes_route():
                 if not name: continue
                 nl = name.lower()
                 if nl in PROTECTED_SYSTEM_APPS or is_hidden(nl): continue
-                if name not in procs:
-                    procs.append(name)
+                if nl in seen: continue
+                seen.add(nl)
+                procs.append(name)
+
+                if nl in TRUSTED_APPS:
+                    continue
+
+                if nl in hr_lookup:
+                    high_risk.append(dict(hr_lookup[nl]))
+                    continue
+
+                if nl in sus_lookup:
+                    suspicious.append(dict(sus_lookup[nl]))
+                    continue
+
+                reasons = []
+                score = 0
+
+                try:
+                    cpu = proc.cpu_percent(interval=None)
+                    if cpu and cpu > 35.0:
+                        score += 2
+                        reasons.append(f"CPU spike ({cpu:.1f}%)")
+                except Exception:
+                    pass
+
+                try:
+                    mem = proc.memory_info().rss / (1024 * 1024)
+                    if mem and mem > 500:
+                        score += 2
+                        reasons.append(f"High memory allocation ({mem:.0f} MB)")
+                except Exception:
+                    pass
+
+                sev = round(min(100, (score / 9.0) * 100)) if score > 0 else 0
+                if score >= 4 or sev >= 70:
+                    high_risk.append({"app": name, "reasons": reasons or ["High-risk security pattern"], "severity": max(75, sev)})
+                elif score >= 2 or sev >= 40:
+                    suspicious.append({"app": name, "reasons": reasons or ["Unusual process activity"], "severity": max(50, sev)})
             except Exception:
                 pass
     except Exception:
         pass
-        
+
+    return procs, suspicious, high_risk
+
+@app.route("/scan_processes", methods=["GET", "POST"])
+def scan_processes_route():
+    procs, sus, hi = _evaluate_live_processes()
     with data_lock:
         latest_data["running"] = procs
+        
+        # Merge detected with existing and simulation/registered threats
+        sus_names = {o.get("app", "").lower() for o in sus}
+        hi_names = {o.get("app", "").lower() for o in hi}
+        
+        for item in latest_data.get("suspicious", []):
+            an = item.get("app", "").lower()
+            if an and an not in sus_names and not is_hidden(an):
+                sus.append(item)
+                sus_names.add(an)
+                
+        for item in latest_data.get("high_risk", []):
+            an = item.get("app", "").lower()
+            if an and an not in hi_names and not is_hidden(an):
+                hi.append(item)
+                hi_names.add(an)
+
         if _sim_attack_active:
-            for sim_item in _sim_data.get("suspicious", []) + _sim_data.get("high_risk", []):
-                s_app = sim_item.get("app")
+            for s in _sim_data.get("suspicious", []):
+                an = s.get("app", "").lower()
+                if an and an not in sus_names and not is_hidden(an):
+                    sus.append(s)
+                    sus_names.add(an)
+            for h in _sim_data.get("high_risk", []):
+                an = h.get("app", "").lower()
+                if an and an not in hi_names and not is_hidden(an):
+                    hi.append(h)
+                    hi_names.add(an)
+
+            for s_app in [item.get("app") for item in sus + hi if item.get("app")]:
                 if s_app and s_app not in latest_data["running"] and not is_hidden(s_app.lower()):
                     latest_data["running"].append(s_app)
-                    
-    return jsonify({"status": "scanned", "count": len(latest_data["running"]), "running": latest_data["running"]})
+
+        latest_data["suspicious"] = sus
+        latest_data["high_risk"] = hi
+
+    return jsonify({"status": "scanned", "count": len(latest_data["running"]), "running": latest_data["running"], "suspicious": latest_data["suspicious"], "high_risk": latest_data["high_risk"]})
 
 @app.route("/get_report")
 def get_report():
     with data_lock:
+        if not latest_data["running"]:
+            procs, sus, hi = _evaluate_live_processes()
+            latest_data["running"] = procs
+            if sus and not latest_data["suspicious"]:
+                latest_data["suspicious"] = sus
+            if hi and not latest_data["high_risk"]:
+                latest_data["high_risk"] = hi
+
         running_out    = [a for a in latest_data["running"]    if not is_hidden(a.lower())]
         suspicious_out = [o for o in latest_data["suspicious"] if not is_hidden(o.get("app","").lower())]
         high_risk_out  = [o for o in latest_data["high_risk"]  if not is_hidden(o.get("app","").lower())]
-        
-        if not running_out:
-            try:
-                for proc in psutil.process_iter(['name']):
-                    n = proc.info.get('name')
-                    if n and not is_hidden(n.lower()) and n.lower() not in PROTECTED_SYSTEM_APPS and n not in running_out:
-                        running_out.append(n)
-                latest_data["running"] = running_out
-            except Exception:
-                pass
+
+        if _sim_attack_active:
+            existing_sus = {o.get("app","").lower() for o in suspicious_out}
+            for s in _sim_data.get("suspicious", []):
+                an = s.get("app", "").lower()
+                if an and an not in existing_sus and not is_hidden(an):
+                    suspicious_out.append(s)
+                    existing_sus.add(an)
+
+            existing_hi = {o.get("app","").lower() for o in high_risk_out}
+            for h in _sim_data.get("high_risk", []):
+                an = h.get("app", "").lower()
+                if an and an not in existing_hi and not is_hidden(an):
+                    high_risk_out.append(h)
+                    existing_hi.add(an)
+
+            for item in suspicious_out + high_risk_out:
+                iapp = item.get("app")
+                if iapp and iapp not in running_out and not is_hidden(iapp.lower()):
+                    running_out.append(iapp)
 
         profile_out = dict(latest_data.get("profile_summary", {}))
 

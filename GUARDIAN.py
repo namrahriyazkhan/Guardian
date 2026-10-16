@@ -233,6 +233,8 @@ def start_app_monitor():
     try:
         print("Starting App Monitor...")
         import app_monitor
+        if hasattr(app_monitor, "main_loop"):
+            app_monitor.main_loop()
         print("App Monitor started successfully.")
     except Exception as e:
         print(f"App Monitor failed to start: {e}")
